@@ -33,6 +33,16 @@ function getFileNameFromUrl(url) {
   return slashIndex === -1 ? path : path.slice(slashIndex + 1);
 }
 
+function sanitizeResourceTag(tag, fallbackTag) {
+  const clean = (value) => String(value || "")
+    .replace(/[,\r\n]+/g, " ")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clean(tag) || clean(fallbackTag) || "Kelee Plugin";
+}
+
 // ── Loon → QX conversion ────────────────────────────────────────────────────
 
 function loonPluginToQXResource(input, displayName) {
@@ -51,7 +61,8 @@ function loonPluginToQXResource(input, displayName) {
       return input;
     }
 
-    const tag = displayName || getFileNameFromUrl(pluginUrl).replace(/\.lpx$/i, "");
+    const fallbackTag = getFileNameFromUrl(pluginUrl).replace(/\.lpx$/i, "");
+    const tag = sanitizeResourceTag(displayName, fallbackTag);
     const resourceJson = JSON.stringify({
       rewrite_remote: [
         `${pluginUrl}, tag=${tag}, update-interval=172800, opt-parser=true, inserted-resource=true, enabled=true`
@@ -86,65 +97,30 @@ function rewriteJsonBody(body) {
 
 // ── Client-side injected script ─────────────────────────────────────────────
 
+function getSharedConverterSource() {
+  return [
+    getUrlPath,
+    getFileNameFromUrl,
+    sanitizeResourceTag,
+    loonPluginToQXResource,
+    rewritePluginList
+  ].map((fn) => fn.toString()).join("\n\n");
+}
+
 function getClientConverterScript() {
+  const sharedConverterSource = getSharedConverterSource();
+
   return String.raw`
 <script>
 (function () {
   if (window.__loonToQXClientInstalled) return;
   window.__loonToQXClientInstalled = true;
 
-  var LOON_PLUGIN_PREFIX = "loon://import?plugin=";
-  var QX_ADD_RESOURCE_PREFIX = "quantumult-x:///add-resource?remote-resource=";
+  var LOON_PLUGIN_PREFIX = ${JSON.stringify(LOON_PLUGIN_PREFIX)};
+  var QX_ADD_RESOURCE_PREFIX = ${JSON.stringify(QX_ADD_RESOURCE_PREFIX)};
+  var convertedCount = 0;
 
-  function getUrlPath(url) {
-    var withoutHash = url.split("#")[0];
-    var withoutQuery = withoutHash.split("?")[0];
-    return withoutQuery;
-  }
-
-  function getFileNameFromUrl(url) {
-    var path = getUrlPath(url);
-    var slashIndex = path.lastIndexOf("/");
-    return slashIndex === -1 ? path : path.slice(slashIndex + 1);
-  }
-
-  function loonPluginToQXResource(input, displayName) {
-    if (typeof input !== "string" || input.indexOf(LOON_PLUGIN_PREFIX) !== 0) {
-      return input;
-    }
-
-    try {
-      var pluginUrl = decodeURIComponent(input.slice(LOON_PLUGIN_PREFIX.length));
-      if (!pluginUrl) {
-        return input;
-      }
-
-      var pluginPath = getUrlPath(pluginUrl);
-      if (!/^https?:\/\//i.test(pluginUrl) || !/\.lpx$/i.test(pluginPath)) {
-        return input;
-      }
-
-      var tag = displayName || getFileNameFromUrl(pluginUrl).replace(/\.lpx$/i, "");
-      var resourceJson = JSON.stringify({
-        rewrite_remote: [
-          pluginUrl + ", tag=" + tag + ", update-interval=172800, opt-parser=true, inserted-resource=true, enabled=true"
-        ]
-      });
-
-      return QX_ADD_RESOURCE_PREFIX + encodeURIComponent(resourceJson);
-    } catch (_) {
-      return input;
-    }
-  }
-
-  function rewritePluginList(lists) {
-    if (!Array.isArray(lists)) return;
-    lists.forEach(function (item) {
-      if (item && typeof item === "object" && typeof item.url === "string") {
-        item.url = loonPluginToQXResource(item.url, item.name || item.title || "");
-      }
-    });
-  }
+${sharedConverterSource}
 
   // Intercept fetch() so dynamically-loaded /list.json is also converted
   var nativeFetch = window.fetch;
