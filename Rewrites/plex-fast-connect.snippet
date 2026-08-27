@@ -1,0 +1,12 @@
+; Plex Fast Connect for Quantumult X
+;
+; Requires Quantumult X v1.0.25+ for script URL parameters after #.
+; QX v1.5.6+ exposes these parameters through $environment.variables.
+; Edit the parameters after # on both lines when needed.
+; QX cannot synthesize a response from script-request-header; the response
+; rewrite performs the cached direct-connection probe and XML replacement.
+
+hostname = plex.tv
+
+^https:\/\/plex\.tv\/api\/resources(?:\.xml)?(?:\?.*)?$ url script-request-header https://raw.githubusercontent.com/gogrhw/quantumult-x/refs/heads/main/Scripts/plex-fast-connect.js#phase=request&bypass_official=true&lan_url=auto&remote_url=auto&bypass_timeout=3&probe_timeout=2&allow_relay=true&debug=false
+^https:\/\/plex\.tv\/api\/resources(?:\.xml)?(?:\?.*)?$ url script-response-body https://raw.githubusercontent.com/gogrhw/quantumult-x/refs/heads/main/Scripts/plex-fast-connect.js#phase=response&bypass_official=true&lan_url=auto&remote_url=auto&bypass_timeout=3&probe_timeout=2&allow_relay=true&debug=false
