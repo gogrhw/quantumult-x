@@ -1,0 +1,4 @@
+# Local-only agent instructions and generated agent artifacts.
+AGENTS.md
+.agents/
+agent-output/
