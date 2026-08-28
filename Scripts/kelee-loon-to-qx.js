@@ -1,5 +1,5 @@
 /**
- * Quantumult X MITM — Kelee Loon plugin store → QX resource converter
+ * Kelee Loon plugin store → QX resource converter
  *
  * Usage (rewrite_remote):
  *   ^https:\/\/hub\.kelee\.one\/list\.json(?:[?#].*)?$ url script-response-body https://raw.githubusercontent.com/gogrhw/quantumult-x/refs/heads/main/Scripts/kelee-loon-to-qx.js

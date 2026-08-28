@@ -77,43 +77,29 @@ Plex 客户端会从 `plex.tv/api/resources` 获取 Plex Media Server 的多个�
 3. 缓存失效时，从 Plex 官方响应中识别服务器并并发探测可用连接。
 4. 把选中的连接写回响应；探测失败时保留官方原始响应，不阻断 Plex 登录或发现流程。
 
-默认配置 `bypass_official=true` 会优先使用缓存或配置的直连地址。若设置为 `false`，脚本会针对官方返回的每个服务器筛选可用连接，并按配置决定是否保留 Relay 连接。
+脚本只使用 Plex 官方返回的非 Relay 连接。它会并发探测这些连接，并使用第一个通过令牌验证的地址。
 
 ### 使用
 
 1. 导入 [Plex Fast Connect snippet](https://raw.githubusercontent.com/gogrhw/quantumult-x/refs/heads/main/Rewrites/plex-fast-connect.snippet)。
 2. 确认 `plex.tv` 已加入 MITM，并开启 QX 重写。
 3. 打开 Plex 客户端或触发一次服务器发现。
-4. 如需自定义连接地址，修改 snippet 中两条规则 URL 里 `#` 后的参数；请求阶段和响应阶段必须保持一致。
 
-脚本会在 QX 的 `$prefs` 中缓存已识别的官方 Device。修改 `lan_url`、`remote_url` 后，缓存签名会自动变化，不会误用旧配置；服务器返回 `401/403` 时也会自动清除失效缓存。
+脚本会在 QX 的 `$prefs` 中缓存已识别的官方 Device。服务器返回 `401` 或 `403` 时，脚本会清除失效缓存，并重新使用 Plex 官方响应发现服务器。
 
-### 参数
+### 固定行为
 
-两条 Plex 规则使用同一组参数。`phase` 只用于区分请求阶段和响应阶段，不要手动改成其他值。
+Plex snippet 不传递脚本参数，脚本也不读取 `$environment`。请求和响应规则直接引用同一个脚本 URL，脚本根据运行上下文区分阶段。
 
-| 参数 | 默认值 | 说明 |
-| --- | --- | --- |
-| `phase` | `request` / `response` | 请求规则使用 `request`，响应规则使用 `response` |
-| `bypass_official` | `true` | 是否优先走缓存或自定义直连；设为 `false` 可改为筛选官方连接列表 |
-| `lan_url` | `auto` | 局域网 Plex 地址，例如 `http://192.168.1.20:32400`；`auto` 表示自动发现 |
-| `remote_url` | `auto` | 外网 Plex 地址，例如 `https://plex.example.com:32400`；`auto` 表示自动发现 |
-| `bypass_timeout` | `3` | 缓存/自定义地址探测超时，范围 `0.5–4` 秒 |
-| `probe_timeout` | `2` | 筛选官方连接时的探测超时，范围 `0.5–3` 秒 |
-| `allow_relay` | `true` | `bypass_official=false` 时，直连失败后是否尝试 Plex Relay |
-| `debug` | `false` | 是否输出详细探测日志 |
-
-例如，使用固定的局域网和外网地址时，把两条规则的参数分别改成类似下面的形式：
-
-```text
-lan_url=http://192.168.1.20:32400&remote_url=https://plex.example.com:32400
-```
-
-地址支持 `http`、`https`、域名、IPv4 和带方括号的 IPv6。若不确定地址是否正确，先保留 `auto`。
+- 自动从 `plex.tv/api/resources` 发现服务器。
+- 优先探测缓存 Device 中的非 Relay 连接。
+- 每轮探测的超时时间固定为 3 秒。
+- 不使用自定义地址，不回退到 Plex Relay，也不输出详细调试日志。
+- 没有验证到可用连接时保留 Plex 官方原始响应。
 
 ### 版本要求
 
-Plex snippet 通过脚本 URL `#` 后的参数传值。snippet 注释标注需要 QX `1.0.25+`；QX `1.5.6+` 才通过 `$environment.variables` 提供参数，脚本对旧版本保留了回退读取方式，仍建议使用较新的 QX 版本。
+Plex snippet 需要 QX 支持 `script-request-header`、`script-response-body`、`$task.fetch` 和 `$prefs`。脚本不依赖 `$environment.sourcePath` 或 `$environment.variables`。官方文档没有标注这些脚本能力的最低版本，建议使用最新版本的 QX。
 
 ## 常见问题
 
@@ -132,11 +118,11 @@ Plex snippet 通过脚本 URL `#` 后的参数传值。snippet 注释标注需�
 
 ### Plex 没有切换到预期地址
 
-开启 `debug=true` 后查看 QX 日志，重点检查：
+查看 QX 日志，并检查以下项目：
 
-- 请求阶段和响应阶段两条规则是否都存在，且参数一致。
+- 请求阶段和响应阶段两条规则是否都存在，且引用同一个脚本 URL。
 - `plex.tv` MITM 是否生效。
-- 固定地址是否能在设备上直接访问 Plex 的 `/identity` 或 `/library/sections`。
+- Plex 官方返回的非 Relay 地址是否能在设备上访问 `/library/sections`。
 - Plex 官方返回的访问令牌是否仍有效。
 
 探测不到可用连接时脚本会保留官方响应，这是预期的安全回退行为。
