@@ -1,10 +1,11 @@
 # Quantumult X 规则与脚本
 
-这里存放个人使用的 Quantumult X（以下简称 QX）重写规则和脚本。目前包含两个功能：
+这里存放个人使用的 Quantumult X（以下简称 QX）重写规则和脚本。目前包含三个功能：
 
 | 功能 | 用途 |
 | --- | --- |
 | Kelee Loon → QX | 将 [Kelee 插件中心](https://hub.kelee.one) 中的 Loon 插件导入链接转换成 QX 资源导入链接 |
+| Plexamp Qwen | 将 Plexamp 发往 OpenAI 接口的文本和图片请求转换成阿里云 Model Studio 的 Qwen 请求 |
 | Plex Fast Connect | 探测 Plex Media Server 的可用连接，把官方返回的连接列表优化为更快的连接 |
 
 ## 快速安装
@@ -12,23 +13,25 @@
 在 QX 中打开下面的链接，导入对应的 snippet：
 
 - [Kelee Loon → QX](https://raw.githubusercontent.com/gogrhw/quantumult-x/refs/heads/main/Rewrites/kelee-loon-to-qx.snippet)
+- [Plexamp Qwen](https://raw.githubusercontent.com/gogrhw/quantumult-x/refs/heads/main/Rewrites/plexamp-qwen.snippet)
 - [Plex Fast Connect](https://raw.githubusercontent.com/gogrhw/quantumult-x/refs/heads/main/Rewrites/plex-fast-connect.snippet)
 
-导入后确认 QX 的“重写”功能已开启。两个 snippet 都引用了本仓库 `main` 分支上的远程脚本，因此正常情况下不需要手动复制 JavaScript 文件。
+导入后确认 QX 的“重写”功能已开启。三个 snippet 都引用了本仓库 `main` 分支上的远程脚本，因此正常情况下不需要手动复制 JavaScript 文件。
 
 ## 前置配置
 
-这两个功能都需要 QX 的 MITM。根据实际使用的功能，把域名加入现有的 `[mitm]` 配置中：
+三个功能都需要 QX 的 MITM。根据实际使用的功能，把域名加入现有的 `[mitm]` 配置中：
 
 ```ini
 [mitm]
-hostname = hub.kelee.one, plex.tv
+hostname = hub.kelee.one, api.openai.com, plex.tv
 ```
 
 如果 `[mitm]` 已经存在，只需把域名合并进去，不要重复创建配置段。只使用其中一个功能时，可以只添加对应域名：
 
 - Kelee：`hub.kelee.one`
-- Plex：`plex.tv`
+- Plexamp Qwen：`api.openai.com`
+- Plex Fast Connect：`plex.tv`
 
 ## Kelee Loon → QX
 
@@ -65,6 +68,60 @@ quantumult-x:///add-resource?remote-resource=...
 - `https://hub.kelee.one/` 或 `index.html`：注入客户端转换脚本。
 
 只有指向 HTTP(S) `.lpx` 文件的 Loon 插件链接会被转换；其他链接保持原样。资源标签优先使用条目的 `name` 或 `title`，没有名称时使用文件名。
+
+## Plexamp Qwen
+
+### 作用
+
+Plexamp 使用固定的 OpenAI 接口完成 Sonic Sage 文本生成和 AI 播放列表封面生成。这个规则会：
+
+1. 为 `/v1/models` 返回 Plexamp 可识别的兼容模型列表。
+2. 把 `/v1/chat/completions` 请求代理到 Model Studio 的 OpenAI 兼容接口，并把模型名改成 `text_model`。
+3. 把 `/v1/images/generations` 请求转换成 Qwen-Image 原生请求，再把结果转换回 OpenAI Images 响应格式。
+
+API Key 保留在 Plexamp 的 OpenAI API Key 字段中。脚本不会把 API Key 写入仓库或 `$prefs`，但会从请求的 `Authorization` 标头读取它，并发送到 `api_host`。
+
+### 使用
+
+1. 导入 [Plexamp Qwen snippet](https://raw.githubusercontent.com/gogrhw/quantumult-x/refs/heads/main/Rewrites/plexamp-qwen.snippet)。
+2. 把 `api.openai.com` 加入 MITM，信任 QX 证书，并开启重写。
+3. 在 Plexamp 的 OpenAI API Key 字段中填写 Model Studio API Key。
+4. 在 Plexamp 中触发 Sonic Sage 或 AI 播放列表封面生成。
+
+这三条规则必须同时存在，并且必须使用相同的 URL 片段参数。规则只匹配以下 HTTPS 路径：
+
+- `/v1/models` 及单个模型详情路径。
+- `/v1/chat/completions`。
+- `/v1/images/generations`。
+
+匹配范围不受 Plexamp 进程限制。启用 snippet 后，同一设备上其他应用发往这些 OpenAI 路径的请求也会被改写。
+
+### 参数
+
+在三条规则的脚本 URL 末尾修改参数。每条规则必须使用相同的参数值。
+
+| 参数 | 默认值 | 合法值和行为 |
+| --- | --- | --- |
+| `api_host` | `dashscope.aliyuncs.com` | Model Studio API 主机名。输入完整 URL 时，脚本只使用其中的主机名 |
+| `text_model` | `qwen3.8-max` | 非空的文本模型 ID |
+| `image_model` | `qwen-image-3.0` | 非空的图片模型 ID |
+| `image_size` | `auto` | `auto` 或 `宽x高`。宽和高必须在 512 到 2048 之间；无效值回退为 `1024*1024` |
+| `prompt_extend` | `true` | `true` 或 `false`，控制图片提示词扩写 |
+| `watermark` | `false` | `true` 或 `false`，控制图片水印 |
+| `image_timeout` | `180` | 图片生成超时秒数。脚本把数值限制在 30 到 210 之间 |
+| `debug` | `false` | `true` 或 `false`。启用后输出不含 API Key 的调试日志 |
+
+下面的 URL 片段使用默认值：
+
+```text
+#api_host=dashscope.aliyuncs.com&text_model=qwen3.8-max&image_model=qwen-image-3.0&image_size=auto&prompt_extend=true&watermark=false&image_timeout=180&debug=false
+```
+
+### 失败行为和版本要求
+
+请求缺少 API Key、请求正文不是 JSON 或图片提示词为空时，脚本返回 OpenAI 格式的错误响应。Model Studio 请求失败、响应无效或图片下载失败时，脚本返回上游错误，不把请求回退到 OpenAI。
+
+Plexamp Qwen snippet 需要 QX 支持 `script-echo-response`、`script-analyze-echo-response`、`$task.fetch`、`$environment` 和二进制响应体。官方文档没有标注这些能力的最低版本，建议使用最新版本的 QX。
 
 ## Plex Fast Connect
 
@@ -127,16 +184,30 @@ Plex snippet 需要 QX 支持 `script-request-header`、`script-response-body`�
 
 探测不到可用连接时脚本会保留官方响应，这是预期的安全回退行为。
 
+### Plexamp 没有生成文本或图片
+
+查看 QX 日志，并检查以下项目：
+
+- 三条 Plexamp Qwen 规则是否都已启用，且参数完全相同。
+- `api.openai.com` MITM 是否生效，证书是否已被系统信任。
+- Plexamp 中的 Model Studio API Key 是否有效。
+- QX 是否能访问 GitHub Raw 脚本地址和 `api_host`。
+- 自定义的模型 ID 是否可用于当前 Model Studio 账号。
+
+把 `debug` 临时改为 `true` 可以查看路由和模型信息。日志不会主动输出 API Key 或完整请求正文。
+
 ## 文件结构
 
 ```text
 .
 ├── Rewrites/
 │   ├── kelee-loon-to-qx.snippet
-│   └── plex-fast-connect.snippet
+│   ├── plex-fast-connect.snippet
+│   └── plexamp-qwen.snippet
 ├── Scripts/
 │   ├── kelee-loon-to-qx.js
-│   └── plex-fast-connect.js
+│   ├── plex-fast-connect.js
+│   └── plexamp-qwen.js
 └── README.md
 ```
 
@@ -144,6 +215,6 @@ Plex snippet 需要 QX 支持 `script-request-header`、`script-response-body`�
 
 ## 安全提示
 
-这些脚本运行在 QX MITM 环境中，请只从自己信任的地址导入。Plex 脚本会读取 Plex 官方 `Device` 中的访问令牌，并把令牌用于探测官方返回或你配置的服务器地址；不要填写不信任的目标地址，也不要公开 QX 日志或带令牌的资源响应。
+这些脚本运行在 QX MITM 环境中，请只从自己信任的地址导入。Plex Fast Connect 会读取 Plex 官方 `Device` 中的访问令牌，并把令牌用于探测官方返回的服务器地址。Plexamp Qwen 会读取请求中的 Model Studio API Key，并把它发送到 `api_host`。不要把 `api_host` 改成不信任的地址，也不要公开 QX 日志、带令牌的资源响应或 API Key。
 
 仓库地址：[github.com/gogrhw/quantumult-x](https://github.com/gogrhw/quantumult-x)

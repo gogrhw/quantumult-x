@@ -1,0 +1,10 @@
+; Plexamp Qwen
+;
+; Use an Alibaba Cloud Model Studio API key in Plexamp's OpenAI API key field.
+; Keep the URL-fragment parameters identical on all three rules.
+
+hostname = api.openai.com
+
+^https:\/\/api\.openai\.com\/v1\/models(?:\/[^?]+)?(?:\?.*)?$ url script-echo-response https://raw.githubusercontent.com/gogrhw/quantumult-x/refs/heads/main/Scripts/plexamp-qwen.js#api_host=dashscope.aliyuncs.com&text_model=qwen3.8-max&image_model=qwen-image-3.0&image_size=auto&prompt_extend=true&watermark=false&image_timeout=180&debug=false
+^https:\/\/api\.openai\.com\/v1\/chat\/completions(?:\?.*)?$ url script-analyze-echo-response https://raw.githubusercontent.com/gogrhw/quantumult-x/refs/heads/main/Scripts/plexamp-qwen.js#api_host=dashscope.aliyuncs.com&text_model=qwen3.8-max&image_model=qwen-image-3.0&image_size=auto&prompt_extend=true&watermark=false&image_timeout=180&debug=false
+^https:\/\/api\.openai\.com\/v1\/images\/generations(?:\?.*)?$ url script-analyze-echo-response https://raw.githubusercontent.com/gogrhw/quantumult-x/refs/heads/main/Scripts/plexamp-qwen.js#api_host=dashscope.aliyuncs.com&text_model=qwen3.8-max&image_model=qwen-image-3.0&image_size=auto&prompt_extend=true&watermark=false&image_timeout=180&debug=false
